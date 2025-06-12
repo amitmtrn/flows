@@ -137,7 +137,7 @@ var Flows = /** @class */ (function () {
                         if (!(nextActionData.$$ && nextActionData.$$.jump)) return [3 /*break*/, 6];
                         jumpTo = nextActionData.$$.jump;
                         delete nextActionData.$$.jump;
-                        return [4 /*yield*/, this.executeRepeat(jumpTo, nextActionData, unsafe, 0, meta)];
+                        return [4 /*yield*/, this.executeRepeat(jumpTo, nextActionData, unsafe, nextActionData.$$.i || 0, meta)];
                     case 5: return [2 /*return*/, _a.sent()];
                     case 6: return [4 /*yield*/, this.executeRepeat(flowName, nextActionData, unsafe, i + 1, meta)];
                     case 7: return [2 /*return*/, _a.sent()];

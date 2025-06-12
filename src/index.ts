@@ -171,7 +171,7 @@ export class Flows {
   /**
    * this method run recursively the flow in order to allow async based function and jump between flows.
    */
-  private async executeRepeat<T extends {$$?: {done?: boolean; jump?: string; }}, S extends {$$?: {done?: boolean; jump?: string; }}, U>(flowName: string, data: T, unsafe: U, i: number, meta: {activated: string[]} = {activated: []}): Promise<S> {
+  private async executeRepeat<T extends {$$?: {done?: boolean; jump?: string; i?: number; }}, S extends {$$?: {done?: boolean; jump?: string; i?: number; }}, U>(flowName: string, data: T, unsafe: U, i: number, meta: {activated: string[]} = {activated: []}): Promise<S> {
     const action = this.isActionExists(flowName, i) ? this.getAction(flowName, i) : null;
     const actionData: T = JSON.parse(JSON.stringify(data));
     let nextActionData: S = {$$: actionData.$$} as S;
@@ -219,7 +219,7 @@ export class Flows {
     if(nextActionData.$$ && nextActionData.$$.jump ) {
       const jumpTo = nextActionData.$$.jump;
       delete nextActionData.$$.jump;
-      return await this.executeRepeat(jumpTo, nextActionData, unsafe, 0, meta);
+      return await this.executeRepeat(jumpTo, nextActionData, unsafe, nextActionData.$$.i || 0, meta);
     }
     
     return await this.executeRepeat(flowName, nextActionData, unsafe, i + 1, meta);
