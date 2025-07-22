@@ -1,9 +1,32 @@
 interface HookInput {
-    [SupportedHooks.PRE_ACTION]: {};
-    [SupportedHooks.POST_ACTION]: {};
-    [SupportedHooks.PRE_FLOW]: {};
-    [SupportedHooks.POST_FLOW]: {};
-    [SupportedHooks.EXCEPTION]: {};
+    [SupportedHooks.PRE_ACTION]: {
+        flowName: string;
+        i: number;
+        actionFn: Action<{}, {}>;
+        input: unknown;
+    };
+    [SupportedHooks.POST_ACTION]: {
+        flowName: string;
+        i: number;
+        actionFn: Action<{}, {}>;
+        input: unknown;
+        output: unknown;
+    };
+    [SupportedHooks.PRE_FLOW]: {
+        flowName: string;
+        input: unknown;
+    };
+    [SupportedHooks.POST_FLOW]: {
+        flowName: string;
+        output: unknown;
+    };
+    [SupportedHooks.EXCEPTION]: {
+        flowName: string;
+        i: number;
+        actionFn: Action<{}, {}>;
+        input: unknown;
+        error: Error;
+    };
 }
 export declare enum SupportedHooks {
     PRE_ACTION = "PRE_ACTION",
@@ -12,8 +35,7 @@ export declare enum SupportedHooks {
     POST_FLOW = "POST_FLOW",
     EXCEPTION = "EXCEPTION"
 }
-export declare type Action<ValueType, ReturnType> = (previousValue: Partial<ValueType>, unsafe: unknown) => ReturnType | PromiseLike<ReturnType>;
-export declare type InitialAction<ReturnType> = (...params: any) => ReturnType | PromiseLike<ReturnType>;
+export type Action<ValueType, ReturnType> = (previousValue: Partial<ValueType>, unsafe: unknown) => ReturnType | PromiseLike<ReturnType>;
 export declare class Flows {
     private hooks;
     private flows;
@@ -23,92 +45,11 @@ export declare class Flows {
     /**
      * register flow
      */
-    register<ReturnType>(name: string, flow: readonly [InitialAction<ReturnType>]): void;
-    register<ValueType1, ReturnType>(name: string, flow: readonly [
-        InitialAction<ValueType1>,
-        Action<ValueType1, ReturnType>
-    ]): void;
-    register<ValueType1, ValueType2, ReturnType>(name: string, flow: readonly [
-        InitialAction<ValueType1>,
-        Action<ValueType1, ValueType2>,
-        Action<ValueType2, ReturnType>
-    ]): void;
-    register<ValueType1, ValueType2, ValueType3, ReturnType>(name: string, flow: readonly [
-        InitialAction<ValueType1>,
-        Action<ValueType1, ValueType2>,
-        Action<ValueType2, ValueType3>,
-        Action<ValueType3, ReturnType>
-    ]): void;
-    register<ValueType1, ValueType2, ValueType3, ValueType4, ReturnType>(name: string, flow: readonly [
-        InitialAction<ValueType1>,
-        Action<ValueType1, ValueType2>,
-        Action<ValueType2, ValueType3>,
-        Action<ValueType3, ValueType4>,
-        Action<ValueType4, ReturnType>
-    ]): void;
-    register<ValueType1, ValueType2, ValueType3, ValueType4, ValueType5, ReturnType>(name: string, flow: readonly [
-        InitialAction<ValueType1>,
-        Action<ValueType1, ValueType2>,
-        Action<ValueType2, ValueType3>,
-        Action<ValueType3, ValueType4>,
-        Action<ValueType4, ValueType5>,
-        Action<ValueType5, ReturnType>
-    ]): void;
-    register<ValueType1, ValueType2, ValueType3, ValueType4, ValueType5, ValueType6, ReturnType>(name: string, flow: readonly [
-        InitialAction<ValueType1>,
-        Action<ValueType1, ValueType2>,
-        Action<ValueType2, ValueType3>,
-        Action<ValueType3, ValueType4>,
-        Action<ValueType4, ValueType5>,
-        Action<ValueType5, ValueType6>,
-        Action<ValueType6, ReturnType>
-    ]): void;
-    register<ValueType1, ValueType2, ValueType3, ValueType4, ValueType5, ValueType6, ValueType7, ReturnType>(name: string, flow: readonly [
-        InitialAction<ValueType1>,
-        Action<ValueType1, ValueType2>,
-        Action<ValueType2, ValueType3>,
-        Action<ValueType3, ValueType4>,
-        Action<ValueType4, ValueType5>,
-        Action<ValueType5, ValueType6>,
-        Action<ValueType6, ValueType7>,
-        Action<ValueType7, ReturnType>
-    ]): void;
-    register<ValueType1, ValueType2, ValueType3, ValueType4, ValueType5, ValueType6, ValueType7, ValueType8, ReturnType>(name: string, flow: readonly [
-        InitialAction<ValueType1>,
-        Action<ValueType1, ValueType2>,
-        Action<ValueType2, ValueType3>,
-        Action<ValueType3, ValueType4>,
-        Action<ValueType4, ValueType5>,
-        Action<ValueType5, ValueType6>,
-        Action<ValueType6, ValueType7>,
-        Action<ValueType7, ValueType8>,
-        Action<ValueType8, ReturnType>
-    ]): void;
-    register<ValueType1, ValueType2, ValueType3, ValueType4, ValueType5, ValueType6, ValueType7, ValueType8, ValueType9, ReturnType>(name: string, flow: readonly [
-        InitialAction<ValueType1>,
-        Action<ValueType1, ValueType2>,
-        Action<ValueType2, ValueType3>,
-        Action<ValueType3, ValueType4>,
-        Action<ValueType4, ValueType5>,
-        Action<ValueType5, ValueType6>,
-        Action<ValueType6, ValueType7>,
-        Action<ValueType7, ValueType8>,
-        Action<ValueType8, ValueType9>,
-        Action<ValueType9, ReturnType>
-    ]): void;
-    register<ValueType1, ValueType2, ValueType3, ValueType4, ValueType5, ValueType6, ValueType7, ValueType8, ValueType9, ValueType10, ReturnType>(name: string, flow: readonly [
-        InitialAction<ValueType1>,
-        Action<ValueType1, ValueType2>,
-        Action<ValueType2, ValueType3>,
-        Action<ValueType3, ValueType4>,
-        Action<ValueType4, ValueType5>,
-        Action<ValueType5, ValueType6>,
-        Action<ValueType6, ValueType7>,
-        Action<ValueType7, ValueType8>,
-        Action<ValueType8, ValueType9>,
-        Action<ValueType9, ValueType10>,
-        Action<ValueType10, ReturnType>
-    ]): void;
+    register<T = any>(name: string, flow: Array<(data: T, unsafe?: unknown) => T | Promise<T>> | []): void;
+    /**
+     * register all flows in a folder
+     */
+    registerFolder(folder: string): void;
     /**
      *  add hook
      */
@@ -122,15 +63,15 @@ export declare class Flows {
      * start the execution process on a registered flow.
      */
     execute<T extends {
-        $$: {
+        $$?: {
             done?: boolean;
             jump?: string;
         };
-    }, S extends {
-        $$: {
+    } = {}, S extends {
+        $$?: {
             done?: boolean;
             jump?: string;
         };
-    }, U>(flowName: string, input: T, unsafe?: U): Promise<S>;
+    } = {}, U = {}>(flowName: string, input: T, unsafe?: U): Promise<S>;
 }
 export {};

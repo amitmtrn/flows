@@ -14,7 +14,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     function verb(n) { return function (v) { return step([n, v]); }; }
     function step(op) {
         if (f) throw new TypeError("Generator is already executing.");
-        while (_) try {
+        while (g && (g = 0, op[0] && (_ = 0)), _) try {
             if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
             if (y = 0, t) op = [op[0] & 2, t.value];
             switch (op[0]) {
@@ -37,6 +37,10 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 };
 exports.__esModule = true;
 exports.Flows = exports.SupportedHooks = void 0;
+var fs = require("fs");
+var path = require("path");
+var debuglib = require("debug");
+var debug = debuglib('flows');
 var SupportedHooks;
 (function (SupportedHooks) {
     SupportedHooks["PRE_ACTION"] = "PRE_ACTION";
@@ -47,18 +51,19 @@ var SupportedHooks;
 })(SupportedHooks = exports.SupportedHooks || (exports.SupportedHooks = {}));
 var Flows = /** @class */ (function () {
     function Flows() {
-        this.hooks = new Map([
-            [SupportedHooks.PRE_ACTION, []],
-            [SupportedHooks.POST_ACTION, []],
-            [SupportedHooks.PRE_FLOW, []],
-            [SupportedHooks.POST_FLOW, []],
-            [SupportedHooks.EXCEPTION, []]
-        ]);
+        var _a;
+        this.hooks = (_a = {},
+            _a[SupportedHooks.PRE_ACTION] = [],
+            _a[SupportedHooks.POST_ACTION] = [],
+            _a[SupportedHooks.PRE_FLOW] = [],
+            _a[SupportedHooks.POST_FLOW] = [],
+            _a[SupportedHooks.EXCEPTION] = [],
+            _a);
         this.flows = new Map();
         this.executeRepeat = this.executeRepeat.bind(this);
     }
     Flows.prototype.getHook = function (hookName) {
-        var hook = this.hooks.get(hookName);
+        var hook = this.hooks[hookName];
         if (!Array.isArray(hook)) {
             throw new Error("Hook ".concat(hookName, " is not a known hook, please read the docs regarding acceptable hooks"));
         }
@@ -71,8 +76,30 @@ var Flows = /** @class */ (function () {
         }
         return flow[i];
     };
+    /**
+     * register flow
+     */
     Flows.prototype.register = function (name, flow) {
+        debug('register', name, flow.map(function (f) { return f.name; }).join(', '));
         this.flows.set(name, flow);
+    };
+    /**
+     * register all flows in a folder
+     */
+    Flows.prototype.registerFolder = function (folder) {
+        var _this = this;
+        var files = fs.readdirSync(folder);
+        files.forEach(function (file) {
+            var filePath = path.join(folder, file);
+            var stats = fs.statSync(filePath);
+            if (stats.isDirectory()) {
+                _this.registerFolder(filePath);
+            }
+            else {
+                var relativeFilePath = path.relative(folder, filePath);
+                _this.register(relativeFilePath.split('.')[0], require(filePath).default);
+            }
+        });
     };
     /**
      *  add hook
