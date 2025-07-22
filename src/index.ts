@@ -113,7 +113,7 @@ export class Flows {
         this.registerFolder(filePath);
       } else {
         const relativeFilePath = path.relative(folder, filePath);
-        this.register(relativeFilePath.split('.')[0], require(filePath));
+        this.register(relativeFilePath.split('.')[0], require(filePath).default);
       }
     });
   }
