@@ -49,7 +49,8 @@ export declare class Flows {
     /**
      * register all flows in a folder
      */
-    registerFolder(folder: string): void;
+    registerFolder(folder: string): Promise<void>;
+    private _registerFolder;
     /**
      *  add hook
      */

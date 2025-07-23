@@ -102,20 +102,24 @@ export class Flows {
   /**
    * register all flows in a folder
    */
-  registerFolder(folder: string) {
-    const files = fs.readdirSync(folder);
+  public async registerFolder(folder: string) {
+    await this._registerFolder(folder, folder);
+  }
 
-    files.forEach(file => {
+  private async _registerFolder(folder: string, originFolder: string) {
+    const files = await fs.promises.readdir(folder);
+
+    await Promise.all(files.map(async (file) => {
       const filePath = path.join(folder, file);
-      const stats = fs.statSync(filePath);
+      const stats = await fs.promises.stat(filePath);
 
       if(stats.isDirectory()) {
-        this.registerFolder(filePath);
+        await this._registerFolder(filePath, originFolder);
       } else {
-        const relativeFilePath = path.relative(folder, filePath);
-        this.register(relativeFilePath.split('.')[0], require(filePath).default);
+        const relativeFilePath = path.relative(originFolder, filePath);
+        this.register(relativeFilePath.split('.')[0], await import(filePath).then(m => m.default));
       }
-    });
+    }));
   }
 
   /**

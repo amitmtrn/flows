@@ -102,18 +102,58 @@ var Flows = /** @class */ (function () {
      * register all flows in a folder
      */
     Flows.prototype.registerFolder = function (folder) {
-        var _this = this;
-        var files = fs.readdirSync(folder);
-        files.forEach(function (file) {
-            var filePath = path.join(folder, file);
-            var stats = fs.statSync(filePath);
-            if (stats.isDirectory()) {
-                _this.registerFolder(filePath);
-            }
-            else {
-                var relativeFilePath = path.relative(folder, filePath);
-                _this.register(relativeFilePath.split('.')[0], require(filePath)["default"]);
-            }
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0: return [4 /*yield*/, this._registerFolder(folder, folder)];
+                    case 1:
+                        _a.sent();
+                        return [2 /*return*/];
+                }
+            });
+        });
+    };
+    Flows.prototype._registerFolder = function (folder, originFolder) {
+        return __awaiter(this, void 0, void 0, function () {
+            var files;
+            var _this = this;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0: return [4 /*yield*/, fs.promises.readdir(folder)];
+                    case 1:
+                        files = _a.sent();
+                        return [4 /*yield*/, Promise.all(files.map(function (file) { return __awaiter(_this, void 0, void 0, function () {
+                                var filePath, stats, relativeFilePath, _a, _b;
+                                return __generator(this, function (_c) {
+                                    var _d;
+                                    switch (_c.label) {
+                                        case 0:
+                                            filePath = path.join(folder, file);
+                                            return [4 /*yield*/, fs.promises.stat(filePath)];
+                                        case 1:
+                                            stats = _c.sent();
+                                            if (!stats.isDirectory()) return [3 /*break*/, 3];
+                                            return [4 /*yield*/, this._registerFolder(filePath, originFolder)];
+                                        case 2:
+                                            _c.sent();
+                                            return [3 /*break*/, 5];
+                                        case 3:
+                                            relativeFilePath = path.relative(originFolder, filePath);
+                                            _a = this.register;
+                                            _b = [relativeFilePath.split('.')[0]];
+                                            return [4 /*yield*/, (_d = filePath, Promise.resolve().then(function () { return require(_d); })).then(function (m) { return m["default"]; })];
+                                        case 4:
+                                            _a.apply(this, _b.concat([_c.sent()]));
+                                            _c.label = 5;
+                                        case 5: return [2 /*return*/];
+                                    }
+                                });
+                            }); }))];
+                    case 2:
+                        _a.sent();
+                        return [2 /*return*/];
+                }
+            });
         });
     };
     /**
