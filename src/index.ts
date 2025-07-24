@@ -86,7 +86,7 @@ export class Flows {
    * register flow
    */
   register<T = any>(name: string, flow: Array<(data: T, unsafe?: unknown) => T | Promise<T>> | []): void {
-    debug('register', name, flow.map(f => f.name).join(', '));
+    debug('register', name);
 
     if(name.includes('init') && this.flows.has('init')) {
       const currentInit = this.flows.get('init') as Array<Action<unknown, unknown>>;

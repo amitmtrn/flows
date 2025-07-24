@@ -89,7 +89,7 @@ var Flows = /** @class */ (function () {
      * register flow
      */
     Flows.prototype.register = function (name, flow) {
-        debug('register', name, flow.map(function (f) { return f.name; }).join(', '));
+        debug('register', name);
         if (name.includes('init') && this.flows.has('init')) {
             var currentInit = this.flows.get('init');
             var newInit = __spreadArray(__spreadArray([], currentInit, true), flow, true);
