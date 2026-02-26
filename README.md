@@ -1,198 +1,289 @@
-<p align="center">
-  <a href="" rel="noopener">
-    
-  </a>
-</p>
-
-<h3 align="center">@codeinkit/flows</h3>
-
-<div align="center">
+# @codeinkit/flows
 
 [![Status](https://img.shields.io/badge/status-active-success.svg)]()
 [![GitHub Issues](https://img.shields.io/github/issues/codeinkit/flows.svg)](https://github.com/codeinkit/flows/issues)
-[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/codeinkit/flows.svg)](https://github.com/codeinkit/flows/pulls)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://choosealicense.com/licenses/mit/)
 
-</div>
+A lightweight TypeScript library for flow-based programming. Organize logic as a pipeline of small, focused functions — each one receives the output of the previous.
 
 ---
 
-<p align="center"> 
-  Flows is a library that aim to make writing code concept flow based.
-  <br> 
-</p>
+## Table of Contents
 
-## 📝 Table of Contents
-
-- [About](#about)
-- [Getting Started](#getting_started)
-- [Deployment](#deployment)
-- [Usage](#usage)
-- [Built Using](#built_using)
+- [Why flow-based?](#why-flow-based)
+- [Install](#install)
+- [Quick start](#quick-start)
+- [Core concepts](#core-concepts)
+  - [Actions](#actions)
+  - [Registering flows](#registering-flows)
+  - [Executing flows](#executing-flows)
+  - [The `$$` control object](#the--control-object)
+  - [Hooks](#hooks)
+- [API reference](#api-reference)
+- [Testing](./TESTING.md)
 - [Contributing](#contributing)
-- [Authors](#authors)
-- [Acknowledgments](#acknowledgement)
 
-## 🧐 About <a name = "about"></a>
+---
 
-When writing code we want to build a good architecture in order to scale and maintain our code.
+## Why flow-based?
 
-Nowadays the most common architectures are MVC-like (Model View Controller).
+MVC and similar architectures work well at small scale, but business logic tends to accumulate in controllers and services, making individual pieces hard to test or reuse.
 
-MVC is great, but it lacks the ability to separate the code to readable chunks, which makes the code harder to maintain and scale when it grows larger.
+Flow-based programming breaks logic into small, stateless functions (actions). Each action does one thing, returns an object, and passes it on. This makes every step independently testable and composable.
 
-A flow based approach can help keep the architecture clean, and easy to scale.
+---
 
-When writing in flow base architecture every action (function in flow) can stand by itself, this fact makes the code separable which also makes it also easy to check, debug and develop.
+## Install
 
-## 🏁 Getting Started <a name = "getting_started"></a>
-### Prerequisites
-
-[NodeJS](https://nodejs.org/)
-
-### Installing
-
-```
-npm i @codeinkit/flows
+```sh
+npm install @codeinkit/flows
 ```
 
-## 🔧 Running the tests <a name = "tests"></a>
+Requires Node.js 17+ (uses `structuredClone`).
 
-```
-npm test
-```
-### Example
+---
 
-```js
-const { Flows } = require('@codeinkit/flows');
+## Quick start
 
-//create the flow
+```ts
+import { Flows, SupportedHooks } from '@codeinkit/flows';
+
 const flows = new Flows();
 
-//first action
-function first_action(flowData) {
-  console.log('action can do simple stuff');
-  const variable = 'all variable should be in the function scope (no state outside an action)';
-  return {
-    ...flowData,
-    variable: 'returning object will move all the data to the next action in the flow'
-  };
-}
+// Register a named flow — each action receives the previous action's return value
+flows.register('greet', [
+  (data: { name: string }) => ({ ...data, greeting: `Hello, ${data.name}!` }),
+  (data) => ({ message: data.greeting.toUpperCase() }),
+]);
 
-//second action
-function second_action(flowData) {
-  console.log(flowData.variable);
-  //this function will throw an exception since it doesn't return an object
-  //return {...flowData}
-}
-
-//third action
-function third_action(flowData) {
-  console.log('flowData is unique on each action therefore you need to add only serialize variable default serialization use JSON.stringify');
-  return {message:'done'};
-}
-
-//register the functions to the flow
-flows.register('flow_name', [first_action, second_action, third_action]);
-
-//register a 'pre_action' hook that will printout the input of each function
-flows.hook('pre_action', ({flowName, input, output, i, actionFn, error}) => {
-  console.log(input);
+// Add a hook to log every action's input
+flows.hook(SupportedHooks.PRE_ACTION, ({ flowName, i, input }) => {
+  console.log(`[${flowName}] action ${i}`, input);
 });
 
-//register an 'exception' hook that will printout the error
-flows.hook('exception', ({flowName, input, output, i, actionFn, error}) => {
-  console.log(error);
-});
-
-//execute the flow
-flows.execute('flow_name', {});
-
+// Execute the flow and get the final result
+const result = await flows.execute('greet', { name: 'Alice' });
+console.log(result.message); // "HELLO, ALICE!"
 ```
 
-## 🎈 Usage <a name="usage"></a>
-there are 2 basic things you can do with flow, register and execute.
+---
 
-### Flow Registration
-```js
-// the flow name should always be a string
-// the array in the second parameter is the list of action, each action is a function, 
-// it's called action because it's a part of a flow.
-// the flows library will execute the actions in order.
-flows.register('flow_name', []);
-```
-
-### Flow Execution
-```js
-// the flow name should be a name that was registered, it the flow is not registered an error will occurs
-// the second parameter is the initial data that pass to the first action
-flows.execute('flow_name', {});
-```
+## Core concepts
 
 ### Actions
-An action is a function that exists in a flow.
 
-An action can be async, meaning it will return promise that resolve some data. If the promise is rejected and nothing catches the exception it will be available in the exception hook.
+An action is a plain function — sync or async — that:
 
-An action gets data through the 'data' parameter. That data is the data returned from the previous action (or from the flow execution command, if this is the first action).
+1. Receives the data object from the previous action (or the initial input for the first action)
+2. Returns a new object that is passed to the next action
 
-Actions are required to return an object when it is done (that will be sent to the next action).
-The returned data must be serializable with `JSON.stringify()`.
+```ts
+// Sync action
+function addTimestamp(data: { userId: string }) {
+  return { ...data, createdAt: new Date().toISOString() };
+}
 
-### The $$ object
-When returning a data object from an action, the action can also pass execution instructions to the flow.
-It does that by adding a "$$" object to the returned object.
+// Async action — dependencies come from `unsafe`, not from module scope.
+// The library types `unsafe` as `unknown` because it doesn't know your app's
+// dependencies — but YOU do, so type it concretely in your action.
+type Deps = { db: Database };
 
-The $$ object supports the following:
-
-  * done - boolean - indicates to the flow execution to end the flow
-  * jump - string - the name of another flow to jump to
-
-#### done example
-```js
-function action(data) {
-  return {$$: {done: true}};
+async function fetchUser(data: { userId: string }, unsafe: Deps) {
+  const user = await unsafe.db.users.findById(data.userId);
+  return { ...data, user };
 }
 ```
 
-#### jump example
-```js
-function action(data) {
-  return {$$: {jump: 'other_flow'}};
+**Rules:**
+- An action must return a plain object (not a primitive, array, or `null`).
+- The returned object must be serializable via `structuredClone` (no functions, no circular references).
+- All state lives in the data object — actions should be stateless.
+- **Actions must be isolated.** An action must not close over or import external dependencies directly. Everything it needs — file system, database clients, loggers, config — must come through `unsafe`. This keeps actions pure, portable, and independently testable.
+
+```ts
+// BAD — action reaches outside itself via a module-level import
+import fs from 'fs';
+async function readConfig(data: { path: string }) {
+  const config = await fs.promises.readFile(data.path, 'utf8'); // external dep leaked in
+  return { ...data, config };
 }
+
+// GOOD — dependency is injected through `unsafe`, typed concretely
+type Deps = { fs: typeof import('fs') };
+
+async function readConfig(data: { path: string }, unsafe: Deps) {
+  const config = await unsafe.fs.promises.readFile(data.path, 'utf8');
+  return { ...data, config };
+}
+```
+
+### Registering flows
+
+```ts
+flows.register('flow-name', [action1, action2, action3]);
+```
+
+TypeScript infers each action's `data` parameter type from the previous action's return type — no extra annotations needed beyond the first action.
+
+```ts
+flows.register('pipeline', [
+  (data: { id: number }) => ({ id: data.id, raw: fetchRaw(data.id) }),
+  (data) => ({ id: data.id, parsed: parse(data.raw) }), // data.raw is typed
+  (data) => ({ result: data.parsed }),                   // data.parsed is typed
+]);
+```
+
+To auto-register every file in a directory as a flow (using the relative file path as the flow name):
+
+```ts
+await flows.registerFolder(path.join(__dirname, 'flows'));
+```
+
+To remove a flow:
+
+```ts
+flows.unregister('flow-name');
+```
+
+### Executing flows
+
+```ts
+const result = await flows.execute('flow-name', { initialKey: 'value' });
+```
+
+- If the flow is not registered, `execute` resolves with the input and logs a warning.
+- Use the `T` and `S` type parameters to annotate input and output shapes:
+
+```ts
+const result = await flows.execute<{ id: number }, { user: User }>('get-user', { id: 42 });
+```
+
+The third argument, `unsafe`, is passed to every action as a second parameter. Use it to inject dependencies (loggers, DB clients, etc.) without putting them in the serializable data object.
+
+The library types `unsafe` as `unknown` because it is generic — but your action functions should declare the concrete type they expect:
+
+```ts
+// Define your app's dependency type once
+type Deps = { db: Database; logger: Logger };
+
+// Use it directly in the action — no casting needed
+async function saveUser(data: { name: string }, unsafe: Deps) {
+  await unsafe.db.users.insert({ name: data.name });
+  unsafe.logger.info('user saved');
+  return data;
+}
+
+// Pass the real deps at call time
+await flows.execute('flow-name', inputData, { db, logger } satisfies Deps);
+```
+
+### The `$$` control object
+
+Any action can include a `$$` field in its return value to send control instructions to the executor. The `$$` object is preserved across the entire flow and is not visible to the user's domain data unless explicitly spread.
+
+#### `done` — stop the flow early
+
+```ts
+function earlyExit(data: { isValid: boolean }) {
+  if (!data.isValid) {
+    return { ...data, $$: { done: true } };
+  }
+  return data;
+}
+```
+
+#### `jump` — continue in a different flow
+
+```ts
+function routeRequest(data: { type: string }) {
+  if (data.type === 'admin') {
+    return { ...data, $$: { jump: 'admin-flow' } };
+  }
+  return data;
+}
+```
+
+Cyclic jumps (A → B → A) are detected and throw an error.
+
+#### `requestId` and custom metadata
+
+Any extra fields placed on `$$` persist through the entire flow, even if later actions do not return `$$`. This is useful for tracing:
+
+```ts
+// Pass a requestId at execution time
+flows.execute('flow-name', { $$: { requestId: 'abc-123' }, userId: 42 });
+
+// Every hook and every action has access to data.$$.requestId throughout
 ```
 
 ### Hooks
 
-hook registration is done with
-```js
-flows.hook('hook_name', () => {});
+Hooks observe the flow lifecycle. They can be sync or async.
+
+```ts
+flows.hook(SupportedHooks.PRE_FLOW,   ({ flowName, input })           => { ... });
+flows.hook(SupportedHooks.POST_FLOW,  ({ flowName, output })          => { ... });
+flows.hook(SupportedHooks.PRE_ACTION, ({ flowName, i, actionFn, input })          => { ... });
+flows.hook(SupportedHooks.POST_ACTION,({ flowName, i, actionFn, input, output })  => { ... });
+flows.hook(SupportedHooks.EXCEPTION,  ({ flowName, i, actionFn, input, error })   => { ... });
 ```
 
-there are 5 types of hooks pre_action, post_action, pre_flow, post_flow, exception.
+| Hook | When it fires |
+|------|--------------|
+| `PRE_FLOW` | Once, before the first action |
+| `POST_FLOW` | Once, after the last action (or after `done`) |
+| `PRE_ACTION` | Before each action |
+| `POST_ACTION` | After each action |
+| `EXCEPTION` | When an action throws; the flow ends gracefully after the hook runs — the error is never re-thrown |
 
-  * pre_flow - run at the beginning of the flow `flows.hook('pre_flow', ({flowName, input}) => {});`
-  * post_flow - run at the end of the flow `flows.hook('post_flow', ({flowName, output}) => {});`
-  * pre_action - run at the beginning of each action `flows.hook('pre_action', ({flowName, i, actionFn, input}) => {});`
-  * post_action - run at the end of each action  `flows.hook('post_action', ({flowName, i, actionFn, input, output}) => {});`
-  * exception - run when exception accrue in action `flows.hook('exception', ({flowName, i, actionFn, input, error}) => {});`
+Remove a hook with:
 
-the parameters that pass to the hooks are
+```ts
+flows.unhook(SupportedHooks.PRE_ACTION, myHookFn);
+```
 
-  * flowName - a string represent the flow name
-  * input - the object provided to the action
-  * output - the object returned by the action
-  * i - the index of the action in the flow
-  * actionFn - the function of the action
-  * error - the error of the exception
+---
 
-## ✍️ Authors <a name = "authors"></a>
+## API reference
 
-- [@amitmtrn](https://github.com/amitmtrn) - Idea & Initial work
+```ts
+class Flows {
+  // Register a named flow (typed overloads cover up to 8 chained actions)
+  register(name: string, flow: Action[]): void
 
-## Contributing <a name="contributing"></a>
+  // Remove a registered flow
+  unregister(name: string): void
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+  // Auto-register every file in a folder; flow name = relative path without extension
+  registerFolder(folder: string): Promise<void>
 
-Please make sure to update tests as appropriate.
+  // Execute a registered flow with an initial data object
+  execute<T, S>(flowName: string, input: T, unsafe?: unknown): Promise<S>
 
+  // Add a lifecycle hook
+  hook(name: SupportedHooks, fn: HookFn): void
+
+  // Remove a specific hook function
+  unhook(name: SupportedHooks, fn: HookFn): void
+}
+
+enum SupportedHooks {
+  PRE_FLOW    = 'PRE_FLOW',
+  POST_FLOW   = 'POST_FLOW',
+  PRE_ACTION  = 'PRE_ACTION',
+  POST_ACTION = 'POST_ACTION',
+  EXCEPTION   = 'EXCEPTION',
+}
+```
+
+---
+
+## Contributing
+
+Pull requests are welcome. For major changes please open an issue first to discuss the approach.
+
+Make sure to update tests as appropriate: `npm test`.
+
+---
+
+**Author:** [@amitmtrn](https://github.com/amitmtrn)

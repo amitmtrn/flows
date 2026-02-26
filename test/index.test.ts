@@ -62,7 +62,7 @@ describe('flow test', () => {
 
     const response = await flows.execute<{}>('test_flow', { initial: true })
     expect(response).not.toMatchObject({ other2: true })
-    expect(action).not.toBeCalled()
+    expect(action).not.toHaveBeenCalled()
   })
 
   describe('hooks', () => {
@@ -77,7 +77,7 @@ describe('flow test', () => {
       flows.hook(SupportedHooks.PRE_FLOW, hook)
 
       await flows.execute<{}>('test_flow', { initial: true })
-      expect(hook).toBeCalledTimes(1)
+      expect(hook).toHaveBeenCalledTimes(1)
     })
 
     it('should run post_flow hook only once after the flow ends', async () => {
@@ -91,7 +91,7 @@ describe('flow test', () => {
       flows.hook(SupportedHooks.POST_FLOW, hook)
 
       await flows.execute<{}>('test_flow', { initial: true })
-      expect(hook).toBeCalledTimes(1)
+      expect(hook).toHaveBeenCalledTimes(1)
     })
 
     it('should run pre_action hook before each action', async () => {
@@ -106,7 +106,7 @@ describe('flow test', () => {
       flows.hook(SupportedHooks.PRE_ACTION, hook)
 
       await flows.execute<{}>('test_flow', { initial: true })
-      expect(hook).toBeCalledTimes(flowToTest.length)
+      expect(hook).toHaveBeenCalledTimes(flowToTest.length)
     })
 
     it('should run post_action hook after each action', async () => {
@@ -121,10 +121,10 @@ describe('flow test', () => {
       flows.hook(SupportedHooks.POST_ACTION, hook)
 
       await flows.execute<{}>('test_flow', { initial: true })
-      expect(hook).toBeCalledTimes(flowToTest.length)
+      expect(hook).toHaveBeenCalledTimes(flowToTest.length)
     })
 
-    it('should run exception hook when function throws', async () => {
+    it('should run exception hook when function throws and resolve gracefully', async () => {
       const hook = jest.fn(() => {})
       const flows = new Flows()
 
@@ -132,14 +132,31 @@ describe('flow test', () => {
         (data) => {
           throw new Error('test exception')
         },
-        (data) => ({ ...data, other2: true }),
+        // action1 always throws → TypeScript infers R1=never; annotate so spread is valid
+        (data: {}) => ({ ...data, other2: true }),
       ])
       flows.hook(SupportedHooks.EXCEPTION, hook)
 
-      await expect(
-        flows.execute<{}>('test_flow', { initial: true })
-      ).rejects.toEqual(new Error('test exception'))
-      expect(hook).toBeCalledTimes(1)
+      const result = await flows.execute<{}>('test_flow', { initial: true })
+      expect(result).toMatchObject({ initial: true })
+      expect(hook).toHaveBeenCalledTimes(1)
+      expect(hook).toHaveBeenCalledWith(expect.objectContaining({ error: new Error('test exception') }))
+    })
+
+    it('should pass the error to post_flow hook on exception', async () => {
+      const postFlow = jest.fn(() => {})
+      const flows = new Flows()
+
+      flows.register('test_flow', [
+        (data) => { throw new Error('boom') },
+      ])
+      flows.hook(SupportedHooks.POST_FLOW, postFlow)
+
+      await flows.execute<{}>('test_flow', { initial: true })
+
+      expect(postFlow).toHaveBeenCalledWith(expect.objectContaining({
+        error: new Error('boom'),
+      }))
     })
   })
 
@@ -176,21 +193,23 @@ describe('flow test', () => {
     })
   })
 
-  it('should throw if action not returning an object', async () => {
+  it('should call exception hook and resolve if action does not return an object', async () => {
+    const onException = jest.fn()
     const flows = new Flows()
     // @ts-ignore
     flows.register('test_flow', [
       (data) => ({ ...data, other: true }),
       () => 'throw me',
     ])
+    flows.hook(SupportedHooks.EXCEPTION, onException)
 
-    await expect(
-      flows.execute<{}>('test_flow', { initial: true })
-    ).rejects.toEqual(
-      new Error(
-        'in flow test_flow action number 1 return "throw me" instead of object!\nactions must return object'
-      )
-    )
+    const result = await flows.execute<{}>('test_flow', { initial: true })
+
+    // resolves with the last good data (output of action 0)
+    expect(result).toMatchObject({ initial: true, other: true })
+    expect(onException).toHaveBeenCalledWith(expect.objectContaining({
+      error: new Error('in flow test_flow action number 1 return "throw me" instead of object!\nactions must return object'),
+    }))
   })
 
   it('should throw error when using unknown hook', () => {
@@ -201,7 +220,7 @@ describe('flow test', () => {
       flows.hook('unknown', () => {})
     }
 
-    expect(unknownHook).toThrowError(
+    expect(unknownHook).toThrow(
       'Hook unknown is not a known hook, please read the docs regarding acceptable hooks'
     )
   })
@@ -211,6 +230,109 @@ describe('flow test', () => {
     const res = await flows.execute<{}>('unknown', { someData: 1 })
 
     expect(res).toMatchObject({ someData: 1 })
-    expect(console.warn).toBeCalledWith('unknown flow does not exists! Skipped')
+    expect(console.warn).toHaveBeenCalledWith('unknown flow does not exists! Skipped')
+  })
+
+  describe('unregister', () => {
+    it('should remove a registered flow', async () => {
+      const flows = new Flows()
+      flows.register('test_flow', [(data) => ({ ...data, other: true })])
+      flows.unregister('test_flow')
+
+      const res = await flows.execute<{}>('test_flow', { initial: true })
+      expect(res).toMatchObject({ initial: true })
+      expect(console.warn).toHaveBeenCalledWith('test_flow flow does not exists! Skipped')
+    })
+  })
+
+  describe('unhook', () => {
+    it('should stop calling a removed hook', async () => {
+      const hook = jest.fn(() => {})
+      const flows = new Flows()
+
+      flows.register('test_flow', [(data) => ({ ...data, other: true })])
+      flows.hook(SupportedHooks.PRE_ACTION, hook)
+      flows.unhook(SupportedHooks.PRE_ACTION, hook)
+
+      await flows.execute<{}>('test_flow', { initial: true })
+      expect(hook).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('type chain', () => {
+    it('infers each action parameter type from the previous action return type', async () => {
+      const flows = new Flows()
+
+      flows.register('typed_flow', [
+        (data: { name: string }) => ({ name: data.name, age: 42 }),
+        // TypeScript infers `data` here as `{ name: string; age: number }`.
+        // The assignment below would be a compile error if inference were wrong.
+        (data) => {
+          const name: string = data.name
+          const age: number = data.age
+          return { greeting: `${name} is ${age}` }
+        },
+      ])
+
+      const result = await flows.execute('typed_flow', { name: 'Alice' })
+      expect(result).toMatchObject({ greeting: 'Alice is 42' })
+    })
+
+    it('works with async actions in the chain', async () => {
+      const flows = new Flows()
+
+      flows.register('async_chain', [
+        async (data: { x: number }) => ({ x: data.x, y: data.x * 2 }),
+        // `data` is inferred as `{ x: number; y: number }`
+        async (data) => {
+          const sum: number = data.x + data.y
+          return { sum }
+        },
+      ])
+
+      const result = await flows.execute('async_chain', { x: 3 })
+      expect(result).toMatchObject({ sum: 9 })
+    })
+
+    it('reports a type error when accessing a property absent from the chain', () => {
+      const flows = new Flows()
+
+      flows.register('typed_flow', [
+        (data: { name: string }) => ({ name: data.name, age: 42 }),
+        (data) => {
+          // `data` is `{ name: string; age: number }` — 'noProp' does not exist.
+          // @ts-expect-error
+          void data.noProp
+          return { greeting: data.name }
+        },
+      ])
+
+      // The runtime assertion is intentionally absent:
+      // if TypeScript *didn't* infer the type correctly (e.g. `data` were `any`),
+      // the @ts-expect-error above would become an "unused directive" compile error,
+      // causing ts-jest to fail this entire test suite.
+    })
+  })
+
+  describe('async hooks', () => {
+    it('should await async hooks before continuing', async () => {
+      const order: string[] = []
+      const flows = new Flows()
+
+      flows.register('test_flow', [
+        (data) => {
+          order.push('action')
+          return { ...data, other: true }
+        },
+      ])
+
+      flows.hook(SupportedHooks.PRE_ACTION, async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        order.push('async-hook')
+      })
+
+      await flows.execute<{}>('test_flow', {})
+      expect(order).toEqual(['async-hook', 'action'])
+    })
   })
 })
